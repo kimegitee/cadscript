@@ -1,3 +1,6 @@
+import tempfile
+import subprocess
+
 def run_script(script:str, verbose=True):
     '''Excecute a series of AutoCAD commands in a subprocess
 
@@ -28,6 +31,11 @@ class Command:
     def export(self, path:str):
         self._append(f'EXPORT "{path}" all\n\n')
         return self._cancel_sequence()
+    def open(self, path:str):
+        return self._append(f'OPEN "{path}"\n')
+    def to_dxf(self, path:str=None):
+        path = '' if path is None else f'"{path}"'
+        return self._append(f'SAVEAS DXF B {path}\n')
     def stlout(self, path:str):
         return self._append(f'STLOUT all\n\n\n"{path}"\n(command)\n')
     def erase(self):
