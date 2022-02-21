@@ -35,7 +35,7 @@ class Command:
         return self._append(f'OPEN "{path}"\n')
     def to_dxf(self, path:str=None):
         path = '' if path is None else f'"{path}"'
-        return self._append(f'SAVEAS DXF B {path}\n')
+        return self._append(f'SAVEAS DXF 16 {path}\n')
     def stlout(self, path:str):
         return self._append(f'STLOUT all\n\n\n"{path}"\n(command)\n')
     def erase(self):
