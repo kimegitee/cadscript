@@ -15,7 +15,7 @@ from cadscript import Command
 command = Command().import_(input).export(output).erase().purge()
 ```
 
-Excecute command via accoconsole.exe
+Excecute command via accoreconsole.exe
 
 ```python
 command.exec()
