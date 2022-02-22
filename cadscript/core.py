@@ -19,6 +19,10 @@ class Command:
     '''
     def __init__(self, s:str=''):
         self.s = s
+    def __enter__(self):
+        return self
+    def __exit__(self, *_):
+        self.exec(verbose=True)
     def _append(self, s:str):
         self.s += s
         return self
