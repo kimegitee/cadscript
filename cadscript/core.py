@@ -1,5 +1,5 @@
-import tempfile
-import subprocess
+from pexpect.popen_spawn import PopenSpawn
+import signal
 
 def run_script(script:str, verbose=True):
     '''Excecute a series of AutoCAD commands in a subprocess
@@ -17,14 +17,16 @@ class Command:
     Each method corresponds to an AutoCAD command of the same name, except when
     such commands conflict with Python keywords, such as `import_` below.
     '''
-    def __init__(self, s:str=''):
+    def __init__(self, s=[]):
         self.s = s
     def __enter__(self):
+        self.process = PopenSpawn('accoreconsole.exe', encoding='utf-16-le')
         return self
     def __exit__(self, *_):
         self.exec(verbose=True)
+        self.process.kill(signal.SIGTERM)
     def _append(self, s:str):
-        self.s += s
+        self.s.append(s)
         return self
     def _cancel_sequence(self):
         '''Add sequence to end infinite input loop'''
@@ -49,4 +51,7 @@ class Command:
     def exec(self, verbose=True):
         '''Execute underlying script'''
         s, self.s = self.s, ''
-        run_script(s, verbose)
+        for line in self.s:
+            self.process.send(line)
+            i = self.expect(['Command:\r\n', 'HELP\r\n\r\n'])
+            print(self.process.before)
