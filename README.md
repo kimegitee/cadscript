@@ -8,15 +8,11 @@ Usage
 
 Make sure accoreconsole.exe is in PATH.
 
-Build AutoCAD script by method chaining. A simple pipeline to convert different CAD formats can be built like so
+Build AutoCAD script by method chaining. A simple pipeline to convert DWG to DXF can be built like so
 
 ```python
-from cadscript import Command
-command = Command().import_(input).export(output).erase().purge()
-```
+from cadscript import Program
 
-Excecute command via accoreconsole.exe
-
-```python
-command.exec()
+with Program() as p:
+    p.open(input).to_dxf(overwrite=True)
 ```
