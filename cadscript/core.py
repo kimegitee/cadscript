@@ -22,7 +22,8 @@ class Program:
     '''
     def __init__(self, s=[]):
         self.p = PopenSpawn('accoreconsole.exe', encoding='utf-16-le')
-        self._return()
+        self.p.expect('.*Command:.*:.*:.*', timeout=None)
+        print(self.p.after)
         self.terminated = False
     def __enter__(self):
         return self
@@ -41,11 +42,11 @@ class Program:
         self._append(f'EXPORT "{path}" all\n\n')
         return self._cancel_sequence()
     def open(self, path:str):
-        return self._exec_utf8(f'open "{path}"')
+        return self._exec_utf8(f'open "{path}"\n')
     def to_dxf(self, path:str=None, overwrite=False):
         path = '' if path is None else f'"{path}"'
         overwrite = 'Y' if overwrite else 'N'
-        return self._exec_utf8(f'saveas dxf 16 {path} {overwrite}')
+        return self._exec_utf8(f'saveas dxf 16 {path} {overwrite}\n')
     def stlout(self, path:str):
         return self._append(f'STLOUT all\n\n\n"{path}"\n(command)\n')
     def erase(self):
@@ -55,33 +56,28 @@ class Program:
     def terminate(self):
         self.p.kill(signal.SIGTERM)
         self.terminated = True
-    def _return(self, command=''):
+    def _return(self, command):
         command = command.split(' ')[0]
-        ok = f'Command: {command}.*Command:\r\n' if command else 'Command:\r\n'
+        ok = f'Command: {command}.*Command:'
+        confirm = f'Command: {command}.*<[YN]>.*'
         error = '\**MessageBox.*'
-        status = self.p.expect([ok, error], timeout=3)
-        if status == 0:
-            print(self.p.before)
-            print(self.p.after)
-        if status == 1:
+        status = self.p.expect([ok, confirm, error], timeout=3)
+        if status == -1:
             raise(RuntimeError('\n' + self.p.after))
+        else:
+            print(self.p.after)
         return self
     def _assert_running(self):
         assert not self.terminated, 'Program has already been terminated'
     def _exec(self, command):
         self._assert_running()
-        self.p.sendline(command)
+        self.p.send(command)
         return self._return(command)
     def _exec_utf8(self, command):
         '''Send utf8 encoded command to AutoCAD for execution'''
         self._assert_running()
-        #with tempfile.NamedTemporaryFile('w+', suffix='.scr', delete=False, encoding='utf-8-sig') as file:
-        with open('temp.scr', 'w+', encoding='utf-8-sig') as file:
-            file.write(command + '\n')
+        with tempfile.NamedTemporaryFile('w+', suffix='.scr', delete=False, encoding='utf-8-sig') as file:
+            file.write(command)
             file.close() # On Windows file has to be closed before being opened again
-            self.p.send('script\n')
-            self.p.expect('Enter script.*', timeout=3)
-            print(self.p.before)
-            print(self.p.after)
-            self.p.send(r'"c:\users\nhat\komatsu\py\temp.scr"' + '\n')
+            self.p.send(f'script "{file.name}"\n')
             return self._return(command)
