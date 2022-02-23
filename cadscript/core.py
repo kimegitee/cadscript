@@ -4,16 +4,6 @@ import os
 import signal
 import tempfile
 
-def run_script(script:str, verbose=True):
-    '''Excecute a series of AutoCAD commands in a subprocess
-
-    Requires accoreconsole.exe to be in PATH'''
-    # It is important to use utf-8-sig not utf-8 on Windows so that Unicode file names are correctly loaded
-    with tempfile.NamedTemporaryFile('w+', suffix='.scr', delete=False, encoding='utf-8-sig') as file:
-        file.write(script)
-        file.close() # On Windows file has to be closed before being opened again
-        subprocess.run(['accoreconsole.exe', '/s', file.name], capture_output=not verbose)
-
 class Program:
     '''Wrapper to generate AutoCAD script
 
