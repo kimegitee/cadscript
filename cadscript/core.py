@@ -1,5 +1,8 @@
 from pexpect.popen_spawn import PopenSpawn
+from pathlib import Path
+import os
 import signal
+import tempfile
 
 def run_script(script:str, verbose=True):
     '''Excecute a series of AutoCAD commands in a subprocess
@@ -11,20 +14,20 @@ def run_script(script:str, verbose=True):
         file.close() # On Windows file has to be closed before being opened again
         subprocess.run(['accoreconsole.exe', '/s', file.name], capture_output=not verbose)
 
-class Command:
+class Program:
     '''Wrapper to generate AutoCAD script
 
     Each method corresponds to an AutoCAD command of the same name, except when
     such commands conflict with Python keywords, such as `import_` below.
     '''
     def __init__(self, s=[]):
-        self.s = s
+        self.p = PopenSpawn('accoreconsole.exe', encoding='utf-16-le')
+        self._return()
+        self.terminated = False
     def __enter__(self):
-        self.process = PopenSpawn('accoreconsole.exe', encoding='utf-16-le')
         return self
     def __exit__(self, *_):
-        self.exec(verbose=True)
-        self.process.kill(signal.SIGTERM)
+        self.terminate()
     def _append(self, s:str):
         self.s.append(s)
         return self
@@ -38,7 +41,7 @@ class Command:
         self._append(f'EXPORT "{path}" all\n\n')
         return self._cancel_sequence()
     def open(self, path:str):
-        return self._append(f'OPEN "{path}"\n')
+        return self._exec(f'open "{path}"')
     def to_dxf(self, path:str=None):
         path = '' if path is None else f'"{path}"'
         return self._append(f'SAVEAS DXF 16 {path}\n')
@@ -48,10 +51,25 @@ class Command:
         return self._append('ERASE all\n\n')
     def purge(self):
         return self._append(f'-PURGE all * n\n')
-    def exec(self, verbose=True):
-        '''Execute underlying script'''
-        s, self.s = self.s, ''
-        for line in self.s:
-            self.process.send(line)
-            i = self.expect(['Command:\r\n', 'HELP\r\n\r\n'])
-            print(self.process.before)
+    def terminate(self):
+        self.p.kill(signal.SIGTERM)
+        self.terminated = True
+    def _return(self, command=''):
+        command = command.split(' ')[0]
+        ok = f'Command: {command}.*Command:\r\n' if command else 'Command:\r\n'
+        error = '\**MessageBox.*'
+        status = self.p.expect([ok, error])
+        if status == 0:
+            print(self.p.before)
+            print(self.p.after)
+        if status == 1:
+            raise(RuntimeError('\n' + self.p.after))
+        return self
+    def _exec(self, command):
+        '''Send command to AutoCAD for execution'''
+        assert not self.terminated, 'Program has already been terminated'
+        with tempfile.NamedTemporaryFile('w+', suffix='.scr', delete=False, encoding='utf-8-sig') as file:
+            file.write(command)
+            file.close() # On Windows file has to be closed before being opened again
+            self.p.sendline(f'script {file.name}') # Go the long way to send utf-8 strings to AutoCAD
+            return self._return(command)

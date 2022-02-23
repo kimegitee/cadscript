@@ -1,1 +1,1 @@
-from .core import Command
+from .core import Program
