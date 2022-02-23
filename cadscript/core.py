@@ -41,10 +41,11 @@ class Program:
         self._append(f'EXPORT "{path}" all\n\n')
         return self._cancel_sequence()
     def open(self, path:str):
-        return self._exec(f'open "{path}"')
-    def to_dxf(self, path:str=None):
+        return self._exec_utf8(f'open "{path}"')
+    def to_dxf(self, path:str=None, overwrite=False):
         path = '' if path is None else f'"{path}"'
-        return self._append(f'SAVEAS DXF 16 {path}\n')
+        overwrite = 'Y' if overwrite else 'N'
+        return self._exec_utf8(f'saveas dxf 16 {path} {overwrite}')
     def stlout(self, path:str):
         return self._append(f'STLOUT all\n\n\n"{path}"\n(command)\n')
     def erase(self):
@@ -58,18 +59,29 @@ class Program:
         command = command.split(' ')[0]
         ok = f'Command: {command}.*Command:\r\n' if command else 'Command:\r\n'
         error = '\**MessageBox.*'
-        status = self.p.expect([ok, error])
+        status = self.p.expect([ok, error], timeout=3)
         if status == 0:
             print(self.p.before)
             print(self.p.after)
         if status == 1:
             raise(RuntimeError('\n' + self.p.after))
         return self
-    def _exec(self, command):
-        '''Send command to AutoCAD for execution'''
+    def _assert_running(self):
         assert not self.terminated, 'Program has already been terminated'
-        with tempfile.NamedTemporaryFile('w+', suffix='.scr', delete=False, encoding='utf-8-sig') as file:
-            file.write(command)
+    def _exec(self, command):
+        self._assert_running()
+        self.p.sendline(command)
+        return self._return(command)
+    def _exec_utf8(self, command):
+        '''Send utf8 encoded command to AutoCAD for execution'''
+        self._assert_running()
+        #with tempfile.NamedTemporaryFile('w+', suffix='.scr', delete=False, encoding='utf-8-sig') as file:
+        with open('temp.scr', 'w+', encoding='utf-8-sig') as file:
+            file.write(command + '\n')
             file.close() # On Windows file has to be closed before being opened again
-            self.p.sendline(f'script {file.name}') # Go the long way to send utf-8 strings to AutoCAD
+            self.p.send('script\n')
+            self.p.expect('Enter script.*', timeout=3)
+            print(self.p.before)
+            print(self.p.after)
+            self.p.send(r'"c:\users\nhat\komatsu\py\temp.scr"' + '\n')
             return self._return(command)
