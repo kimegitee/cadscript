@@ -51,8 +51,9 @@ class Program:
         ok = f'Command: {command}.*Command:'
         confirm = f'Command: {command}.*<[YN]>.*'
         error = '\**MessageBox.*'
-        status = self.p.expect([ok, confirm, error], timeout=3)
-        if status == -1:
+        status = self.p.expect([ok, confirm, error], timeout=5)
+        if status == 2:
+            self.p.send('\x1b')
             raise(RuntimeError('\n' + self.p.after))
         else:
             print(self.p.after)
