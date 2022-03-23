@@ -1,5 +1,7 @@
 from pexpect.popen_spawn import PopenSpawn
+from pexpect import TIMEOUT
 from pathlib import Path
+from typing import Literal as either
 import os
 import signal
 import tempfile
@@ -27,48 +29,56 @@ class Program:
         self.s += '(progn (if (> (getvar "cmdactive") 0) (command)) (princ))\n'
         return self
     def import_(self, path:str):
-        return self._append(f'IMPORT "{path}"\n')
+        path = Path(path).resolve()
+        return self._exec_utf8(f'import "{path}"\n')
     def export(self, path:str):
-        self._append(f'EXPORT "{path}" all\n\n')
-        return self._cancel_sequence()
+        return self._exec_utf8(f'export "{path}" all\n\n')
     def open(self, path:str):
         return self._exec_utf8(f'open "{path}"\n')
-    def to_dxf(self, path:str=None, overwrite=False):
+    def to_dxf(self, path:str=None, format:either['binary', 'text']='text', overwrite=False):
         path = '' if path is None else f'"{path}"'
+        format = 'B' if format == 'binary' else '16'
         overwrite = 'Y' if overwrite else 'N'
-        return self._exec_utf8(f'saveas dxf 16 {path} {overwrite}\n')
+        return self._exec_utf8(f'saveas dxf {format} {path} {overwrite}\n')
     def stlout(self, path:str):
         return self._append(f'STLOUT all\n\n\n"{path}"\n(command)\n')
     def erase(self):
         return self._append('ERASE all\n\n')
     def purge(self):
-        return self._append(f'-PURGE all * n\n')
+        return self._exec(f'-PURGE all *\nn\n')
     def terminate(self):
         self.p.kill(signal.SIGTERM)
         self.terminated = True
-    def _return(self, command):
+    def _return(self, command, ok, error):
         command = command.split(' ')[0]
-        ok = f'Command: {command}.*Command:'
-        confirm = f'Command: {command}.*<[YN]>.*'
-        error = '\**MessageBox.*'
-        status = self.p.expect([ok, confirm, error], timeout=5)
+        if ok is None:
+            ok = f'Command: {command}.*Command:'
+            confirm = f'Command: {command}.*<[YN]>.*Command:'
+            ok = [ok, confirm]
+        if error is None:
+            error = '\**MessageBox.*'
+            error = [error, TIMEOUT]
+        status = self.p.expect(ok + error, timeout=20)
         if status == 2:
             self.p.send('\x1b')
             raise(RuntimeError('\n' + self.p.after))
+        elif status == 3:
+            self.p.send('\x1b')
+            raise(RuntimeError('\n' + self.p.before))
         else:
             print(self.p.after)
         return self
     def _assert_running(self):
         assert not self.terminated, 'Program has already been terminated'
-    def _exec(self, command):
+    def _exec(self, command, ok=None, error=None):
         self._assert_running()
-        self.p.send(command)
-        return self._return(command)
-    def _exec_utf8(self, command):
+        self.p.send(command + 'gibberish\n')
+        return self._return(command, ok, error)
+    def _exec_utf8(self, command, ok=None, error=None):
         '''Send utf8 encoded command to AutoCAD for execution'''
         self._assert_running()
         with tempfile.NamedTemporaryFile('w+', suffix='.scr', delete=False, encoding='utf-8-sig') as file:
-            file.write(command)
+            file.write(command + 'gibberish\n')
             file.close() # On Windows file has to be closed before being opened again
             self.p.send(f'script "{file.name}"\n')
-            return self._return(command)
+            return self._return(command, ok, error)
