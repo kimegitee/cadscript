@@ -43,9 +43,9 @@ class Program:
     def stlout(self, path:str):
         return self._append(f'STLOUT all\n\n\n"{path}"\n(command)\n')
     def erase(self):
-        return self._append('ERASE all\n\n')
+        return self._exec('ERASE all\n\n')
     def purge(self):
-        return self._exec(f'-PURGE all *\nn\n')
+        return self._exec(f'-purge all *\nn\n')
     def terminate(self):
         self.p.kill(signal.SIGTERM)
         self.terminated = True
@@ -56,13 +56,12 @@ class Program:
             confirm = f'Command: {command}.*<[YN]>.*Command:'
             ok = [ok, confirm]
         if error is None:
-            error = '\**MessageBox.*'
-            error = [error, TIMEOUT]
-        status = self.p.expect(ok + error, timeout=20)
-        if status == 2:
+            error = ['\**MessageBox.*', '\*Invalid selection.*', TIMEOUT]
+        status = self.p.expect(ok + error, timeout=120)
+        if status in [2, 3]:
             self.p.send('\x1b')
             raise(RuntimeError('\n' + self.p.after))
-        elif status == 3:
+        elif status == 4:
             self.p.send('\x1b')
             raise(RuntimeError('\n' + self.p.before))
         else:
